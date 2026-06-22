@@ -1,0 +1,288 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PAKOPOLY V1 - Multijugador Online</title>
+  <!-- Google Fonts Outfit -->
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <!-- App Container -->
+  <div id="app">
+    
+    <!-- 1. Screen: Lobby / Ingreso -->
+    <div id="screen-lobby" class="screen active">
+      <div class="lobby-card">
+        <h1 class="logo-text">PAKOPOLY <span class="neon-pink">V1</span></h1>
+        <p class="lobby-subtitle">Compra ciudades, negocia en tiempo real y domina el tablero.</p>
+        
+        <div class="input-group">
+          <label for="lobby-username">Nombre de Usuario</label>
+          <input type="text" id="lobby-username" placeholder="Ej: PlayerOne" maxlength="15">
+        </div>
+
+        <div class="input-group">
+          <label for="lobby-password">Contraseña (para reconexión)</label>
+          <input type="password" id="lobby-password" placeholder="Ej: 1234" maxlength="15">
+        </div>
+
+        <div class="tabs-lobby">
+          <button id="btn-tab-create" class="tab-btn active">Crear Sala</button>
+          <button id="btn-tab-join" class="tab-btn">Unirse a Sala</button>
+        </div>
+
+        <!-- Create Room Settings -->
+        <div id="lobby-create-settings" class="lobby-settings-panel active">
+          <div class="toggle-group">
+            <span>Habilitar Subastas</span>
+            <label class="switch">
+              <input type="checkbox" id="lobby-auctions-toggle" checked>
+              <span class="slider round"></span>
+            </label>
+          </div>
+          <button id="btn-create-room" class="btn btn-primary">Crear Nueva Partida</button>
+        </div>
+
+        <!-- Join Room Settings -->
+        <div id="lobby-join-settings" class="lobby-settings-panel">
+          <div class="input-group">
+            <label for="lobby-room-id">Código de Sala</label>
+            <input type="text" id="lobby-room-id" placeholder="Ej: AX9B2F" style="text-transform: uppercase;">
+          </div>
+          <button id="btn-join-room" class="btn btn-secondary">Unirse a Partida</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 2. Screen: Game Room -->
+    <div id="screen-game" class="screen">
+      
+      <!-- Top header / Bar -->
+      <header class="game-header">
+        <h2 class="header-logo">PAKOPOLY <span class="neon-blue">V1</span></h2>
+        <div class="room-info">
+          <span>Sala: <strong id="display-room-id" class="neon-green">------</strong></span>
+          <button id="btn-copy-link" class="btn btn-mini">Copiar Código</button>
+          <button id="btn-leave-game" class="btn btn-mini btn-danger" style="margin-left: 5px;">Abandonar</button>
+        </div>
+      </header>
+
+      <!-- Main Game Area -->
+      <div class="game-layout">
+        
+        <!-- Tab Navigation for Mobile -->
+        <div class="mobile-tabs">
+          <button id="tab-btn-board" class="mobile-tab-btn active">🗺️ Tablero</button>
+          <button id="tab-btn-panel" class="mobile-tab-btn">⚙️ Acciones</button>
+          <button id="tab-btn-assets" class="mobile-tab-btn">💼 Propiedades</button>
+        </div>
+
+        <!-- Column 1: The Board -->
+        <main class="layout-column column-board active">
+          <div class="board-wrapper">
+            <div id="board" class="monopoly-board">
+              <!-- JS will dynamically render cells 0 to 39 -->
+              <!-- The center of the board -->
+              <div class="board-center" style="position: relative;">
+                <div class="center-content">
+                  <!-- Dice roll display -->
+                  <div class="dice-wrapper">
+                    <div id="die-1" class="die">1</div>
+                    <div id="die-2" class="die">1</div>
+                  </div>
+                  <div id="current-action-text" class="status-alert">Esperando inicio...</div>
+                </div>
+
+                <!-- Overlay Card in the center of the board -->
+                <div id="center-overlay-card" class="center-card-overlay" style="display: none;">
+                  <span id="close-overlay-card" class="close-overlay-btn">&times;</span>
+                  <div id="overlay-card-content"></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </main>
+
+        <!-- Column 2: Turn Panels & Actions -->
+        <section class="layout-column column-panel">
+          
+          <!-- Admin Waiting Room Lobby -->
+          <div id="panel-lobby-waiting" class="panel-card lobby-waiting-card">
+            <h3>Sala de Espera</h3>
+            <p>Esperando a los jugadores...</p>
+            <ul id="waiting-players-list" class="players-lobby-list">
+              <!-- List of players in lobby -->
+            </ul>
+            <div class="admin-actions">
+              <button id="btn-start-game" class="btn btn-primary btn-block" style="display: none;">Iniciar Partida</button>
+              <p id="non-admin-msg" class="helper-text">Esperando que el creador inicie la partida...</p>
+            </div>
+          </div>
+
+          <!-- Gameplay controls -->
+          <div id="panel-game-controls" class="panel-card" style="display: none;">
+            <div class="panel-header">
+              <h3>Panel de Control</h3>
+              <span id="turn-indicator" class="badge">Turno de: ------</span>
+            </div>
+
+            <!-- Action buttons -->
+            <div class="action-buttons-grid">
+              <button id="btn-roll-dice" class="btn btn-accent btn-large" style="display: none;">🎲 Tirar Dados</button>
+              <button id="btn-buy-prop" class="btn btn-success" style="display: none;">💰 Comprar por <span id="buy-price-val">0</span>M</button>
+              <button id="btn-decline-prop" class="btn btn-danger" style="display: none;">✖ Pasar</button>
+              <button id="btn-pay-fine" class="btn btn-warning" style="display: none;">⛓ Pagar Multa (50M)</button>
+              <button id="btn-use-jailcard" class="btn btn-info" style="display: none;">✉ Usar Carta Salida</button>
+              <button id="btn-pay-debt" class="btn btn-success" style="display: none;">💵 Pagar Deuda</button>
+              <button id="btn-manual-bankrupt" class="btn btn-danger" style="display: none;">💀 Bancarrota</button>
+              <button id="btn-end-turn" class="btn btn-primary" style="display: none;">⏭ Finalizar Turno</button>
+            </div>
+
+            <!-- Double / Jail turns helper text -->
+            <div id="action-helper-text" class="helper-text-alert"></div>
+          </div>
+
+          <!-- Live game log -->
+          <div class="panel-card log-card">
+            <h3>Registro de Partida</h3>
+            <div id="game-logs" class="logs-container">
+              <!-- Server logs synchronized in real-time -->
+            </div>
+          </div>
+
+        </section>
+
+        <!-- Column 3: Players & Properties Dashboard -->
+        <section class="layout-column column-assets">
+          
+          <!-- Players money / status list -->
+          <div class="panel-card players-card">
+            <h3>Jugadores</h3>
+            <div id="players-list" class="players-dashboard-list">
+              <!-- Player rows with name, color, money and buttons -->
+            </div>
+          </div>
+
+          <!-- Properties panel of selected player -->
+          <div class="panel-card properties-card">
+            <div class="panel-header">
+              <h3>Propiedades de <span id="selected-player-name" class="neon-blue">Ti</span></h3>
+              <button id="btn-open-trade" class="btn btn-mini">🤝 Proponer Trato</button>
+            </div>
+            
+            <div id="properties-grid" class="properties-deck">
+              <!-- Cards of properties owned by selected player -->
+              <p class="placeholder-text">Selecciona un jugador para ver sus propiedades.</p>
+            </div>
+          </div>
+
+        </section>
+
+      </div>
+    </div>
+
+    <!-- MODAL: Subasta (Auctions) -->
+    <div id="modal-auction" class="modal">
+      <div class="modal-content auction-modal-content">
+        <div class="modal-header">
+          <h2>SUBASTA EN TIEMPO REAL</h2>
+          <div id="auction-timer" class="auction-timer-circle">15</div>
+        </div>
+        
+        <div class="auction-body">
+          <div id="auction-property-card" class="property-deed-preview">
+            <!-- Property card layout -->
+            <div id="auc-card-header" class="deed-header"></div>
+            <div class="deed-body">
+              <h3 id="auc-card-name">Santiago</h3>
+              <p>Valor de mercado: <span id="auc-card-value">100</span>M</p>
+            </div>
+          </div>
+
+          <div class="auction-status">
+            <p>Puja Máxima Actual:</p>
+            <div id="auction-highest-bid" class="highest-bid-display">10M</div>
+            <p>Postor actual: <strong id="auction-highest-bidder" class="neon-pink">Nadie</strong></p>
+          </div>
+        </div>
+
+        <div class="auction-actions">
+          <div class="quick-bid-buttons">
+            <button id="btn-bid-10" class="btn btn-bid">+10M</button>
+            <button id="btn-bid-50" class="btn btn-bid">+50M</button>
+            <button id="btn-bid-100" class="btn btn-bid">+100M</button>
+          </div>
+          <div class="custom-bid-group">
+            <input type="number" id="input-custom-bid" placeholder="Puja personalizada (M)">
+            <button id="btn-bid-custom" class="btn btn-accent">Pujar</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- MODAL: Comercio (Trade Proposal) -->
+    <div id="modal-trade" class="modal">
+      <div class="modal-content trade-modal-content">
+        <div class="modal-header">
+          <h2 id="trade-modal-title">🤝 Proponer Intercambio</h2>
+          <span id="close-trade-modal" class="close-btn">&times;</span>
+        </div>
+
+        <div class="trade-grid">
+          <!-- Left side: Sender offer -->
+          <div class="trade-party">
+            <h4 class="party-title neon-blue">Tus Ofrecimientos</h4>
+            
+            <div class="input-group-inline">
+              <label>Dinero Ofrecido (M):</label>
+              <input type="number" id="trade-offer-money" min="0" value="0">
+            </div>
+
+            <p class="asset-selection-title">Tus Propiedades a Entregar:</p>
+            <div id="trade-offer-properties-list" class="trade-properties-selector">
+              <!-- Checkboxes with properties of proposer -->
+            </div>
+          </div>
+
+          <!-- Right side: Receiver request -->
+          <div class="trade-party">
+            <h4 class="party-title neon-pink" id="trade-receiver-title">Peticiones</h4>
+            
+            <div class="input-group-inline">
+              <label>Dinero Solicitado (M):</label>
+              <input type="number" id="trade-request-money" min="0" value="0">
+            </div>
+
+            <p class="asset-selection-title">Propiedades a Solicitar:</p>
+            <div id="trade-request-properties-list" class="trade-properties-selector">
+              <!-- Checkboxes with properties of counterpart -->
+            </div>
+          </div>
+        </div>
+
+        <div class="trade-actions">
+          <!-- If proposing -->
+          <button id="btn-send-trade-offer" class="btn btn-success btn-large">Enviar Propuesta</button>
+          
+          <!-- If responding -->
+          <div id="trade-response-actions" style="display: none; width: 100%;">
+            <div class="double-button-group">
+              <button id="btn-accept-trade" class="btn btn-success">Aceptar Trato</button>
+              <button id="btn-counter-trade" class="btn btn-warning">Contraofertar</button>
+              <button id="btn-reject-trade" class="btn btn-danger">Rechazar</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Alert Dialog (Global Custom pop-up notification) -->
+    <div id="alert-notification" class="toast-notification"></div>
+
+  </div>
+  <script src="/socket.io/socket.io.js"></script>
+  <script src="client.js"></script>
+</body>
+</html>
