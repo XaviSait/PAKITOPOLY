@@ -76,6 +76,23 @@ const SoundSystem = {
   playCard() {
     // Card sliding sound (pitch modulation)
     this.playTone(600, 0.25, 'triangle', 150);
+  },
+
+  playTurn() {
+    // High-pitched turn chime (alert)
+    this.playTone(987.77, 0.08, 'sine'); // B5
+    setTimeout(() => this.playTone(1318.51, 0.15, 'sine'), 80); // E6
+  },
+
+  playBuild() {
+    // Wood tap / building construction block sound
+    this.playTone(400, 0.05, 'triangle');
+    setTimeout(() => this.playTone(400, 0.05, 'triangle'), 80);
+  },
+
+  playBankruptcy() {
+    // Descending sad synth sound
+    this.playTone(400, 0.6, 'sawtooth', 100);
   }
 };
 
@@ -223,6 +240,42 @@ socket.on('stateUpdate', (state) => {
         SoundSystem.playCard();
       }
     }
+
+    // Check if active player changed and is local player
+    const prevActivePlayer = currentGameState.players && currentGameState.players[currentGameState.turnIndex];
+    const currActivePlayer = state.players && state.players[state.turnIndex];
+    if (currActivePlayer && (!prevActivePlayer || prevActivePlayer.id !== currActivePlayer.id)) {
+      if (currActivePlayer.id === socket.id) {
+        SoundSystem.playTurn();
+      }
+    }
+
+    // Check if houses were built
+    let prevHousesTotal = 0;
+    let currHousesTotal = 0;
+    if (currentGameState.properties && state.properties) {
+      for (let i = 0; i < state.properties.length; i++) {
+        const prevProp = currentGameState.properties[i];
+        const currProp = state.properties[i];
+        if (prevProp && currProp) {
+          prevHousesTotal += (prevProp.houses || 0);
+          currHousesTotal += (currProp.houses || 0);
+        }
+      }
+      if (currHousesTotal > prevHousesTotal) {
+        SoundSystem.playBuild();
+      }
+    }
+
+    // Check if any player went bankrupt
+    if (currentGameState.players && state.players) {
+      state.players.forEach(p => {
+        const prevPlayer = currentGameState.players.find(prev => prev.id === p.id);
+        if (p.isBankrupt && prevPlayer && !prevPlayer.isBankrupt) {
+          SoundSystem.playBankruptcy();
+        }
+      });
+    }
   }
 
   currentGameState = state;
@@ -316,23 +369,7 @@ socket.on('stateUpdate', (state) => {
     document.getElementById('panel-lobby-waiting').style.display = 'none';
     document.getElementById('panel-game-controls').style.display = 'block';
     
-    // Render inactivity timer
-    const timerBadge = document.getElementById('turn-timer-badge');
-    if (state.status === 'playing' && state.turnTimeLeft !== undefined) {
-      timerBadge.style.display = 'inline-block';
-      timerBadge.innerText = `⏱ ${state.turnTimeLeft}s`;
-      if (state.turnTimeLeft <= 10) {
-        timerBadge.style.backgroundColor = 'var(--neon-pink)';
-        timerBadge.style.boxShadow = '0 0 10px var(--neon-pink)';
-        timerBadge.style.animation = 'buttonPulse 1.0s infinite alternate';
-      } else {
-        timerBadge.style.backgroundColor = 'var(--neon-blue)';
-        timerBadge.style.boxShadow = '0 0 10px var(--neon-blue)';
-        timerBadge.style.animation = 'none';
-      }
-    } else {
-      timerBadge.style.display = 'none';
-    }
+
 
     renderBoard(state);
     renderControls(state);
@@ -765,6 +802,7 @@ function renderPlayersList(state) {
   state.players.forEach(p => {
     const row = document.createElement('div');
     row.className = `player-row`;
+    row.style.setProperty('--player-color', p.color);
     if (p.id === selectedPlayerId) row.classList.add('selected');
     if (p.id === state.players[state.turnIndex].id) row.classList.add('active-turn');
     

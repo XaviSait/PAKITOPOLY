@@ -146,16 +146,11 @@ function calculateRent(room, prop, diceSum) {
   return 0;
 }
 
-function resetTurnTimer(room) {
-  room.turnTimeLeft = 45;
-}
-
 function changeTurn(room) {
   // Clear status of turn roll and actions
   room.hasRolled = false;
   room.doubleCount = 0;
   room.currentTurnAction = 'roll'; // roll, handle_tile, bankrupt_or_pay
-  room.turnTimeLeft = 45; // Reset inactivity timer
 
   let attempts = 0;
   do {
@@ -165,108 +160,6 @@ function changeTurn(room) {
 
   const activePlayer = room.players[room.turnIndex];
   logMessage(room, `Turno de ${activePlayer.username}.`);
-}
-
-function handleInactivity(room) {
-  const player = room.players[room.turnIndex];
-  if (!player || player.isBankrupt) {
-    room.turnTimeLeft = 45;
-    return;
-  }
-
-  logMessage(room, `[AUTO] El jugador ${player.username} está inactivo.`);
-
-  if (room.currentTurnAction === 'roll') {
-    autoRollPlayer(room, player);
-  } else if (room.currentTurnAction === 'handle_tile') {
-    autoDeclineProperty(room, player);
-  } else if (room.currentTurnAction === 'bankrupt_or_pay') {
-    autoPayDebt(room, player);
-  } else if (room.currentTurnAction === 'ended_action') {
-    autoEndTurn(room);
-  } else {
-    changeTurn(room);
-  }
-}
-
-function autoRollPlayer(room, player) {
-  const d1 = Math.floor(Math.random() * 6) + 1;
-  const d2 = Math.floor(Math.random() * 6) + 1;
-  room.dice = [d1, d2];
-  const diceSum = d1 + d2;
-  const isDouble = d1 === d2;
-
-  logMessage(room, `[AUTO] Lanzando dados por inactividad: [${d1}, ${d2}] (Total: ${diceSum}M).`);
-
-  if (player.inJail) {
-    room.hasRolled = true;
-    if (isDouble) {
-      player.inJail = false;
-      player.jailTurns = 0;
-      logMessage(room, `[AUTO] ¡${player.username} saca dobles y sale de la cárcel!`);
-      movePlayer(room, player, diceSum);
-    } else {
-      player.jailTurns++;
-      logMessage(room, `[AUTO] No saca dobles en la cárcel (Intento ${player.jailTurns}/3).`);
-      if (player.jailTurns >= 3) {
-        room.debtAmount = 50;
-        room.debtCreditorId = 'bank';
-        room.currentTurnAction = 'bankrupt_or_pay';
-        logMessage(room, `[AUTO] ${player.username} debe pagar 50M de multa al cumplir 3 turnos en la cárcel.`);
-        verifyBankruptcyOption(room, player);
-      } else {
-        room.currentTurnAction = 'ended_action';
-      }
-    }
-  } else {
-    if (isDouble) {
-      room.doubleCount++;
-      if (room.doubleCount >= 3) {
-        player.inJail = true;
-        player.position = 10;
-        player.jailTurns = 0;
-        room.doubleCount = 0;
-        room.hasRolled = true;
-        room.currentTurnAction = 'ended_action';
-        logMessage(room, `[AUTO] ¡3 dobles seguidos! Va a la Cárcel.`);
-      } else {
-        room.hasRolled = false;
-        movePlayer(room, player, diceSum);
-      }
-    } else {
-      room.hasRolled = true;
-      room.doubleCount = 0;
-      movePlayer(room, player, diceSum);
-    }
-  }
-  room.turnTimeLeft = 45;
-}
-
-function autoDeclineProperty(room, player) {
-  const tile = room.properties[player.position];
-  logMessage(room, `[AUTO] Rechazando compra de ${tile.name} por inactividad.`);
-  if (room.settings.auctionsEnabled) {
-    startAuction(room, tile.id);
-  } else {
-    room.currentTurnAction = 'ended_action';
-  }
-  room.turnTimeLeft = 45;
-}
-
-function autoPayDebt(room, player) {
-  if (player.money >= room.debtAmount) {
-    logMessage(room, `[AUTO] Pagando deuda automáticamente.`);
-    handleDebtResolutionCheck(room, player);
-  } else {
-    logMessage(room, `[AUTO] Fondos insuficientes. Declarado en Bancarrota.`);
-    executeBankruptcy(room, player);
-  }
-  room.turnTimeLeft = 45;
-}
-
-function autoEndTurn(room) {
-  logMessage(room, `[AUTO] Pasando turno.`);
-  changeTurn(room);
 }
 
 function startAuction(room, propId) {
@@ -436,8 +329,7 @@ io.on('connection', (socket) => {
         auction: { active: false },
         trade: { active: false },
         debtAmount: 0,
-        debtCreditorId: null,
-        turnTimeLeft: 45
+        debtCreditorId: null
       };
       room = rooms[roomId];
       isNew = true;
@@ -567,7 +459,6 @@ io.on('connection', (socket) => {
     room.status = 'playing';
     room.turnIndex = 0;
     room.logs = [];
-    resetTurnTimer(room);
     logMessage(room, `¡El juego ha comenzado! Turno de ${room.players[0].username}.`);
     io.to(roomId).emit('stateUpdate', cleanRoomState(room));
   });
@@ -582,8 +473,6 @@ io.on('connection', (socket) => {
     const player = room.players[room.turnIndex];
     if (player.id !== socket.id) return;
     if (room.hasRolled) return;
-
-    resetTurnTimer(room);
 
     const d1 = Math.floor(Math.random() * 6) + 1;
     const d2 = Math.floor(Math.random() * 6) + 1;
@@ -822,8 +711,6 @@ io.on('connection', (socket) => {
     if (player.id !== socket.id) return;
     if (room.currentTurnAction !== 'handle_tile') return;
 
-    resetTurnTimer(room);
-
     const tile = room.properties[player.position];
     if (tile.owner !== null || tile.price === null) return;
 
@@ -850,8 +737,6 @@ io.on('connection', (socket) => {
     const player = room.players[room.turnIndex];
     if (player.id !== socket.id) return;
     if (room.currentTurnAction !== 'handle_tile') return;
-
-    resetTurnTimer(room);
 
     const tile = room.properties[player.position];
     if (tile.owner !== null || tile.price === null) return;
@@ -1066,8 +951,6 @@ io.on('connection', (socket) => {
     const player = room.players[room.turnIndex];
     if (player.id !== socket.id || room.currentTurnAction !== 'bankrupt_or_pay') return;
 
-    resetTurnTimer(room);
-
     if (player.money >= room.debtAmount) {
       handleDebtResolutionCheck(room, player);
     } else {
@@ -1234,8 +1117,6 @@ io.on('connection', (socket) => {
     const player = room.players[room.turnIndex];
     if (player.id !== socket.id || !player.inJail) return;
 
-    resetTurnTimer(room);
-
     if (player.money >= 50) {
       player.money -= 50;
       player.inJail = false;
@@ -1259,8 +1140,6 @@ io.on('connection', (socket) => {
 
     const player = room.players[room.turnIndex];
     if (player.id !== socket.id || !player.inJail) return;
-
-    resetTurnTimer(room);
 
     if (player.getOutOfJailCards > 0) {
       player.getOutOfJailCards--;
@@ -1354,28 +1233,7 @@ io.on('connection', (socket) => {
   });
 });
 
-// Inactivity auto-play interval
-setInterval(() => {
-  for (let roomId in rooms) {
-    const room = rooms[roomId];
-    if (room && room.status === 'playing' && !room.auction.active) {
-      if (room.turnTimeLeft === undefined) {
-        room.turnTimeLeft = 45;
-      }
-      room.turnTimeLeft--;
 
-      if (room.turnTimeLeft <= 0) {
-        if (room.trade.active) {
-          logMessage(room, `Intercambio cancelado por inactividad.`);
-          room.trade.active = false;
-        }
-        handleInactivity(room);
-      } else {
-        io.to(roomId).emit('stateUpdate', cleanRoomState(room));
-      }
-    }
-  }
-}, 1000);
 
 server.listen(PORT, () => {
   console.log(`Servidor PAKOPOLY V1 corriendo en http://localhost:${PORT}`);
