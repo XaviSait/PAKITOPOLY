@@ -70,7 +70,17 @@ const COMMUNITY_CARDS = [
   { text: "Pides un Glovo de madrugada para todo el grupo y te toca adelantar el dinero a ti. Paga 100M.", type: "pay", amount: 100 },
   { text: "Te pillan muteado en el Discord y te tiran del canal. Ve directamente a la Cárcel sin pasar por Salida.", type: "jail" },
   { text: "Día de fútbol. Tocó poner bote para las banderas y bufandas de la peña en la grada. Paga 50M.", type: "pay", amount: 50 },
-  { text: "Un error del banco a tu favor te ingresa la beca antes de tiempo. Cobra 200M.", type: "receive", amount: 200 }
+  { text: "Un error del banco a tu favor te ingresa la beca antes de tiempo. Cobra 200M.", type: "receive", amount: 200 },
+  { text: "Haces directo benéfico de 24 horas y tu comunidad revienta el botón de donar. Cobra 100M.", type: "receive", amount: 100 },
+  { text: "Te compras un teclado mecánico custom super ruidoso y te pasas de presupuesto. Paga 50M.", type: "pay", amount: 50 },
+  { text: "Heredas un disco duro antiguo con un pequeño trozo de Bitcoin. Cobra 200M.", type: "receive", amount: 200 },
+  { text: "Te toca pagar la suscripción anual de Netflix, Spotify, Prime y Disney+. Paga 80M.", type: "pay", amount: 80 },
+  { text: "Haces una colaboración patrocinada con una marca de bebidas energéticas. Cobra 120M.", type: "receive", amount: 120 },
+  { text: "Te pillan descargando torrents sin VPN y te llega una multa de tu proveedor de internet. Paga 30M.", type: "pay", amount: 30 },
+  { text: "Ganas un torneo local de Smash Bros en el bar gaming de tu ciudad. Cobra 75M.", type: "receive", amount: 75 },
+  { text: "Factura de la luz por tener el PC gaming encendido 24/7 minando criptos. Paga 120M.", type: "pay", amount: 120 },
+  { text: "Tu vídeo analizando el lore de Dark Souls se hace mega viral. Cobra 100M.", type: "receive", amount: 100 },
+  { text: "Encuentras un pase VIP para el backstage del festival. Quédatelo para Salir de la Cárcel gratis.", type: "jail_free" }
 ];
 
 const LUCK_CARDS = [
@@ -79,7 +89,17 @@ const LUCK_CARDS = [
   { text: "Te lías de fiesta y acabas pagando la ronda de chupitos. Paga 15M a cada jugador en la partida.", type: "pay_each", amount: 15 },
   { text: "El ritmo de tu nueva base urbana se hace viral. Las reproducciones te dan 100M.", type: "receive", amount: 100 },
   { text: "Multa de tráfico por ir a más de 120km/h en el Blablacar. Paga 50M.", type: "pay", amount: 50 },
-  { text: "Avanza hasta la casilla de Salida. Cobra 200M.", type: "move_to", index: 0, collectGo: true }
+  { text: "Avanza hasta la casilla de Salida. Cobra 200M.", type: "move_to", index: 0, collectGo: true },
+  { text: "¡Es tu cumpleaños! Todos te invitan y recibes regalos. Cada jugador te paga 15M.", type: "receive_each", amount: 15 },
+  { text: "Vas a dar un paseo por Cadaqués y te encuentras un billete tirado de 50M.", type: "receive", amount: 50 },
+  { text: "Comisión bancaria de mantenimiento por tu cuenta inactiva. Paga 25M.", type: "pay", amount: 25 },
+  { text: "Te llama tu tía para ayudarte a configurar el router. Te da 50M de propina.", type: "receive", amount: 50 },
+  { text: "Te invitan a dar una charla sobre desarrollo web en una universidad. Cobra 100M.", type: "receive", amount: 100 },
+  { text: "Pierdes el autobús de vuelta a casa de noche y te toca pedir un Uber de tarifa dinámica. Paga 40M.", type: "pay", amount: 40 },
+  { text: "¡Golpe de suerte! Hackeas éticamente una web de comercio y te dan una recompensa por el reporte. Cobra 120M.", type: "receive", amount: 120 },
+  { text: "Avanza hasta la casilla de Barcelona. Si pasas por Salida, cobra 200M.", type: "move_to", index: 37, collectGo: true },
+  { text: "Avanza hasta la casilla de Melón (casilla 1).", type: "move_to", index: 1, collectGo: false },
+  { text: "Encuentras un pase de prensa extraviado. Quédatelo para Salir de la Cárcel gratis.", type: "jail_free" }
 ];
 
 const COLORS = ["#ff0055", "#00ffcc", "#ffcc00", "#0066ff", "#ff00ff", "#33cc33", "#ff6600", "#9933ff"];
@@ -126,11 +146,16 @@ function calculateRent(room, prop, diceSum) {
   return 0;
 }
 
+function resetTurnTimer(room) {
+  room.turnTimeLeft = 45;
+}
+
 function changeTurn(room) {
   // Clear status of turn roll and actions
   room.hasRolled = false;
   room.doubleCount = 0;
   room.currentTurnAction = 'roll'; // roll, handle_tile, bankrupt_or_pay
+  room.turnTimeLeft = 45; // Reset inactivity timer
 
   let attempts = 0;
   do {
@@ -140,6 +165,108 @@ function changeTurn(room) {
 
   const activePlayer = room.players[room.turnIndex];
   logMessage(room, `Turno de ${activePlayer.username}.`);
+}
+
+function handleInactivity(room) {
+  const player = room.players[room.turnIndex];
+  if (!player || player.isBankrupt) {
+    room.turnTimeLeft = 45;
+    return;
+  }
+
+  logMessage(room, `[AUTO] El jugador ${player.username} está inactivo.`);
+
+  if (room.currentTurnAction === 'roll') {
+    autoRollPlayer(room, player);
+  } else if (room.currentTurnAction === 'handle_tile') {
+    autoDeclineProperty(room, player);
+  } else if (room.currentTurnAction === 'bankrupt_or_pay') {
+    autoPayDebt(room, player);
+  } else if (room.currentTurnAction === 'ended_action') {
+    autoEndTurn(room);
+  } else {
+    changeTurn(room);
+  }
+}
+
+function autoRollPlayer(room, player) {
+  const d1 = Math.floor(Math.random() * 6) + 1;
+  const d2 = Math.floor(Math.random() * 6) + 1;
+  room.dice = [d1, d2];
+  const diceSum = d1 + d2;
+  const isDouble = d1 === d2;
+
+  logMessage(room, `[AUTO] Lanzando dados por inactividad: [${d1}, ${d2}] (Total: ${diceSum}M).`);
+
+  if (player.inJail) {
+    room.hasRolled = true;
+    if (isDouble) {
+      player.inJail = false;
+      player.jailTurns = 0;
+      logMessage(room, `[AUTO] ¡${player.username} saca dobles y sale de la cárcel!`);
+      movePlayer(room, player, diceSum);
+    } else {
+      player.jailTurns++;
+      logMessage(room, `[AUTO] No saca dobles en la cárcel (Intento ${player.jailTurns}/3).`);
+      if (player.jailTurns >= 3) {
+        room.debtAmount = 50;
+        room.debtCreditorId = 'bank';
+        room.currentTurnAction = 'bankrupt_or_pay';
+        logMessage(room, `[AUTO] ${player.username} debe pagar 50M de multa al cumplir 3 turnos en la cárcel.`);
+        verifyBankruptcyOption(room, player);
+      } else {
+        room.currentTurnAction = 'ended_action';
+      }
+    }
+  } else {
+    if (isDouble) {
+      room.doubleCount++;
+      if (room.doubleCount >= 3) {
+        player.inJail = true;
+        player.position = 10;
+        player.jailTurns = 0;
+        room.doubleCount = 0;
+        room.hasRolled = true;
+        room.currentTurnAction = 'ended_action';
+        logMessage(room, `[AUTO] ¡3 dobles seguidos! Va a la Cárcel.`);
+      } else {
+        room.hasRolled = false;
+        movePlayer(room, player, diceSum);
+      }
+    } else {
+      room.hasRolled = true;
+      room.doubleCount = 0;
+      movePlayer(room, player, diceSum);
+    }
+  }
+  room.turnTimeLeft = 45;
+}
+
+function autoDeclineProperty(room, player) {
+  const tile = room.properties[player.position];
+  logMessage(room, `[AUTO] Rechazando compra de ${tile.name} por inactividad.`);
+  if (room.settings.auctionsEnabled) {
+    startAuction(room, tile.id);
+  } else {
+    room.currentTurnAction = 'ended_action';
+  }
+  room.turnTimeLeft = 45;
+}
+
+function autoPayDebt(room, player) {
+  if (player.money >= room.debtAmount) {
+    logMessage(room, `[AUTO] Pagando deuda automáticamente.`);
+    handleDebtResolutionCheck(room, player);
+  } else {
+    logMessage(room, `[AUTO] Fondos insuficientes. Declarado en Bancarrota.`);
+    executeBankruptcy(room, player);
+  }
+  room.turnTimeLeft = 45;
+}
+
+function autoEndTurn(room) {
+  logMessage(room, `[AUTO] Pasando turno.`);
+  changeTurn(room);
 }
 
 function startAuction(room, propId) {
@@ -309,7 +436,8 @@ io.on('connection', (socket) => {
         auction: { active: false },
         trade: { active: false },
         debtAmount: 0,
-        debtCreditorId: null
+        debtCreditorId: null,
+        turnTimeLeft: 45
       };
       room = rooms[roomId];
       isNew = true;
@@ -380,7 +508,8 @@ io.on('connection', (socket) => {
     }
 
     // Add player
-    const playerColor = COLORS[room.players.length];
+    const usedColors = room.players.map(p => p.color);
+    const playerColor = COLORS.find(c => !usedColors.includes(c)) || COLORS[0];
     const player = {
       id: socket.id,
       username: username || `Invitado_${socket.id.substring(0, 4)}`,
@@ -404,6 +533,24 @@ io.on('connection', (socket) => {
     io.to(roomId).emit('stateUpdate', cleanRoomState(room));
   });
 
+  socket.on('selectColor', ({ color }) => {
+    const roomId = socket.roomId;
+    const room = rooms[roomId];
+    if (!room || room.status !== 'lobby') return;
+
+    const player = room.players.find(p => p.id === socket.id);
+    if (!player) return;
+
+    const isTaken = room.players.some(p => p.color === color && p.id !== socket.id);
+    if (isTaken) {
+      return socket.emit('errorMsg', 'Ese color ya ha sido elegido por otro jugador.');
+    }
+
+    player.color = color;
+    logMessage(room, `${player.username} cambió su color.`);
+    io.to(roomId).emit('stateUpdate', cleanRoomState(room));
+  });
+
   // 2. Start Game
   socket.on('startGame', () => {
     const roomId = socket.roomId;
@@ -420,6 +567,7 @@ io.on('connection', (socket) => {
     room.status = 'playing';
     room.turnIndex = 0;
     room.logs = [];
+    resetTurnTimer(room);
     logMessage(room, `¡El juego ha comenzado! Turno de ${room.players[0].username}.`);
     io.to(roomId).emit('stateUpdate', cleanRoomState(room));
   });
@@ -434,6 +582,8 @@ io.on('connection', (socket) => {
     const player = room.players[room.turnIndex];
     if (player.id !== socket.id) return;
     if (room.hasRolled) return;
+
+    resetTurnTimer(room);
 
     const d1 = Math.floor(Math.random() * 6) + 1;
     const d2 = Math.floor(Math.random() * 6) + 1;
@@ -643,6 +793,22 @@ io.on('connection', (socket) => {
       
       // trigger land logic again
       handleTileLand(room, player);
+    } else if (card.type === 'receive_each') {
+      const otherPlayers = room.players.filter(p => p.id !== player.id && !p.isBankrupt);
+      let totalReceived = 0;
+      otherPlayers.forEach(p => {
+        p.money -= card.amount;
+        totalReceived += card.amount;
+      });
+      player.money += totalReceived;
+      logMessage(room, `${player.username} cobra ${card.amount}M de cada jugador (Total: ${totalReceived}M).`);
+      room.currentTurnAction = room.doubleCount > 0 ? 'roll' : 'ended_action';
+      if (room.doubleCount > 0) room.hasRolled = false;
+    } else if (card.type === 'jail_free') {
+      player.getOutOfJailCards++;
+      logMessage(room, `${player.username} obtiene una tarjeta de Salir de la Cárcel gratis.`);
+      room.currentTurnAction = room.doubleCount > 0 ? 'roll' : 'ended_action';
+      if (room.doubleCount > 0) room.hasRolled = false;
     }
   }
 
@@ -655,6 +821,8 @@ io.on('connection', (socket) => {
     const player = room.players[room.turnIndex];
     if (player.id !== socket.id) return;
     if (room.currentTurnAction !== 'handle_tile') return;
+
+    resetTurnTimer(room);
 
     const tile = room.properties[player.position];
     if (tile.owner !== null || tile.price === null) return;
@@ -682,6 +850,8 @@ io.on('connection', (socket) => {
     const player = room.players[room.turnIndex];
     if (player.id !== socket.id) return;
     if (room.currentTurnAction !== 'handle_tile') return;
+
+    resetTurnTimer(room);
 
     const tile = room.properties[player.position];
     if (tile.owner !== null || tile.price === null) return;
@@ -855,6 +1025,17 @@ io.on('connection', (socket) => {
       
       if (creditorId === 'bank') {
         logMessage(room, `${player.username} paga su deuda de ${rent}M a la Banca.`);
+        if (player.inJail && player.jailTurns >= 3) {
+          player.inJail = false;
+          player.jailTurns = 0;
+          // Player moves with the dice roll they just threw
+          const diceSum = room.dice[0] + room.dice[1];
+          logMessage(room, `${player.username} sale de la cárcel y avanza ${diceSum} casillas.`);
+          room.debtAmount = 0;
+          room.debtCreditorId = null;
+          movePlayer(room, player, diceSum);
+          return;
+        }
       } else if (creditorId === 'bank_each') {
         const otherPlayers = room.players.filter(p => p.id !== player.id && !p.isBankrupt);
         const splitAmount = Math.floor(rent / otherPlayers.length);
@@ -884,6 +1065,8 @@ io.on('connection', (socket) => {
 
     const player = room.players[room.turnIndex];
     if (player.id !== socket.id || room.currentTurnAction !== 'bankrupt_or_pay') return;
+
+    resetTurnTimer(room);
 
     if (player.money >= room.debtAmount) {
       handleDebtResolutionCheck(room, player);
@@ -1051,6 +1234,8 @@ io.on('connection', (socket) => {
     const player = room.players[room.turnIndex];
     if (player.id !== socket.id || !player.inJail) return;
 
+    resetTurnTimer(room);
+
     if (player.money >= 50) {
       player.money -= 50;
       player.inJail = false;
@@ -1074,6 +1259,8 @@ io.on('connection', (socket) => {
 
     const player = room.players[room.turnIndex];
     if (player.id !== socket.id || !player.inJail) return;
+
+    resetTurnTimer(room);
 
     if (player.getOutOfJailCards > 0) {
       player.getOutOfJailCards--;
@@ -1166,6 +1353,29 @@ io.on('connection', (socket) => {
     }
   });
 });
+
+// Inactivity auto-play interval
+setInterval(() => {
+  for (let roomId in rooms) {
+    const room = rooms[roomId];
+    if (room && room.status === 'playing' && !room.auction.active) {
+      if (room.turnTimeLeft === undefined) {
+        room.turnTimeLeft = 45;
+      }
+      room.turnTimeLeft--;
+
+      if (room.turnTimeLeft <= 0) {
+        if (room.trade.active) {
+          logMessage(room, `Intercambio cancelado por inactividad.`);
+          room.trade.active = false;
+        }
+        handleInactivity(room);
+      } else {
+        io.to(roomId).emit('stateUpdate', cleanRoomState(room));
+      }
+    }
+  }
+}, 1000);
 
 server.listen(PORT, () => {
   console.log(`Servidor PAKOPOLY V1 corriendo en http://localhost:${PORT}`);

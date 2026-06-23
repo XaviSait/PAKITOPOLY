@@ -115,7 +115,12 @@
             <ul id="waiting-players-list" class="players-lobby-list">
               <!-- List of players in lobby -->
             </ul>
-            <div class="admin-actions">
+            <!-- Color Selector -->
+            <div id="lobby-color-selector-section" style="margin-top: 16px; border-top: 1px solid var(--border-glass); padding-top: 12px;">
+              <p style="font-size: 0.75rem; margin-bottom: 8px; color: var(--text-secondary); font-weight: 800; letter-spacing: 0.5px;">ELIGE EL COLOR DE TU FICHA:</p>
+              <div id="lobby-colors-list" style="display: flex; gap: 10px; flex-wrap: wrap;"></div>
+            </div>
+            <div class="admin-actions" style="margin-top: 16px;">
               <button id="btn-start-game" class="btn btn-primary btn-block" style="display: none;">Iniciar Partida</button>
               <p id="non-admin-msg" class="helper-text">Esperando que el creador inicie la partida...</p>
             </div>
@@ -125,7 +130,10 @@
           <div id="panel-game-controls" class="panel-card" style="display: none;">
             <div class="panel-header">
               <h3>Panel de Control</h3>
-              <span id="turn-indicator" class="badge">Turno de: ------</span>
+              <div style="display: flex; align-items: center; gap: 8px;">
+                <span id="turn-timer-badge" class="badge" style="background-color: var(--neon-blue); box-shadow: 0 0 10px rgba(0, 229, 255, 0.4); display: none;">⏱ 45s</span>
+                <span id="turn-indicator" class="badge">Turno de: ------</span>
+              </div>
             </div>
 
             <!-- Action buttons -->
@@ -233,7 +241,7 @@
         <div class="trade-grid">
           <!-- Left side: Sender offer -->
           <div class="trade-party">
-            <h4 class="party-title neon-blue">Tus Ofrecimientos</h4>
+            <h4 class="party-title neon-blue" id="trade-sender-title">Tus Ofrecimientos</h4>
             
             <div class="input-group-inline">
               <label>Dinero Ofrecido (M):</label>

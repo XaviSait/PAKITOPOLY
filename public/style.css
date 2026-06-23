@@ -394,8 +394,8 @@ input:checked + .slider:before {
   display: grid;
   grid-template-columns: repeat(11, 1fr);
   grid-template-rows: repeat(11, 1fr);
-  width: 100%;
-  max-width: 650px;
+  width: min(100%, 75vh);
+  max-width: 620px;
   aspect-ratio: 1 / 1;
   background: #0f1224;
   border: 4px solid var(--border-glass);
@@ -914,6 +914,7 @@ input:checked + .slider:before {
   width: 90%;
   max-width: 580px;
   position: relative;
+  margin: auto;
   animation: modalEnter 0.3s cubic-bezier(0.16, 1, 0.3, 1);
 }
 @keyframes modalEnter {
@@ -1146,7 +1147,7 @@ input:checked + .slider:before {
 
 /* --- RESPONSIVE MEDIA QUERIES (MOBILE-FIRST) --- */
 
-@media (max-width: 900px) {
+@media (max-width: 1200px) {
   .game-layout {
     grid-template-columns: minmax(auto, 500px) 1fr;
     height: auto;
@@ -1306,5 +1307,58 @@ input:checked + .slider:before {
 .neon-pink-glow {
   color: var(--neon-pink);
   text-shadow: 0 0 5px var(--neon-pink);
+}
+
+/* Color Selector in Lobby */
+.lobby-color-dot {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  cursor: pointer;
+  border: 2px solid transparent;
+  transition: all 0.2s;
+  box-shadow: 0 0 5px rgba(255,255,255,0.1);
+  position: relative;
+}
+.lobby-color-dot:hover {
+  transform: scale(1.15);
+  box-shadow: 0 0 10px rgba(255,255,255,0.3);
+}
+.lobby-color-dot.selected {
+  border-color: #fff;
+  transform: scale(1.2);
+  box-shadow: 0 0 12px #fff;
+}
+.lobby-color-dot.used {
+  opacity: 0.25;
+  cursor: not-allowed;
+}
+.lobby-color-dot.used:hover {
+  transform: none;
+  box-shadow: none;
+}
+.lobby-color-dot.used::after {
+  content: '✖';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  color: #fff;
+  font-size: 10px;
+  font-weight: bold;
+}
+
+/* Simplified Trade List Items */
+.trade-item-view {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--border-glass);
+  border-radius: 6px;
+  margin-bottom: 4px;
+  font-size: 0.8rem;
+  color: #fff;
 }
 

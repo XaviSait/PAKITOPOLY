@@ -7,7 +7,7 @@ let currentGameState = null;
 let selectedPlayerId = null; // selected player in the dashboard
 let activePropertyId = null; // currently selected property for action
 let currentOverlayType = null; // 'card' | 'deed-landing' | 'deed-inspect'
-let pendingCardDrawn = null; // Stored card details while token is moving
+let pendingOverlayCard = null; // Stored card or deed overlay details while token is moving
 
 // Web Audio API Sound System
 const SoundSystem = {
@@ -270,6 +270,39 @@ socket.on('stateUpdate', (state) => {
       list.appendChild(li);
     });
 
+    // Render color picker
+    const colorsList = document.getElementById('lobby-colors-list');
+    if (colorsList) {
+      colorsList.innerHTML = '';
+      const localPlayer = state.players.find(p => p.id === localPlayerId);
+      const usedColors = state.players.map(p => p.color);
+      const ALL_COLORS = ["#ff0055", "#00ffcc", "#ffcc00", "#0066ff", "#ff00ff", "#33cc33", "#ff6600", "#9933ff"];
+      
+      ALL_COLORS.forEach(color => {
+        const btn = document.createElement('div');
+        btn.className = 'lobby-color-dot';
+        btn.style.backgroundColor = color;
+        
+        const isCurrent = localPlayer && localPlayer.color === color;
+        const isUsed = usedColors.includes(color) && !isCurrent;
+        
+        if (isCurrent) {
+          btn.classList.add('selected');
+        }
+        if (isUsed) {
+          btn.classList.add('used');
+        }
+        
+        btn.addEventListener('click', () => {
+          if (!isUsed && !isCurrent) {
+            socket.emit('selectColor', { color });
+          }
+        });
+        
+        colorsList.appendChild(btn);
+      });
+    }
+
     const localPlayer = state.players.find(p => p.id === localPlayerId);
     if (localPlayer && localPlayer.isAdmin) {
       document.getElementById('btn-start-game').style.display = 'block';
@@ -283,6 +316,24 @@ socket.on('stateUpdate', (state) => {
     document.getElementById('panel-lobby-waiting').style.display = 'none';
     document.getElementById('panel-game-controls').style.display = 'block';
     
+    // Render inactivity timer
+    const timerBadge = document.getElementById('turn-timer-badge');
+    if (state.status === 'playing' && state.turnTimeLeft !== undefined) {
+      timerBadge.style.display = 'inline-block';
+      timerBadge.innerText = `⏱ ${state.turnTimeLeft}s`;
+      if (state.turnTimeLeft <= 10) {
+        timerBadge.style.backgroundColor = 'var(--neon-pink)';
+        timerBadge.style.boxShadow = '0 0 10px var(--neon-pink)';
+        timerBadge.style.animation = 'buttonPulse 1.0s infinite alternate';
+      } else {
+        timerBadge.style.backgroundColor = 'var(--neon-blue)';
+        timerBadge.style.boxShadow = '0 0 10px var(--neon-blue)';
+        timerBadge.style.animation = 'none';
+      }
+    } else {
+      timerBadge.style.display = 'none';
+    }
+
     renderBoard(state);
     renderControls(state);
     renderPlayersList(state);
@@ -603,15 +654,9 @@ function animatePlayerPath(playerId, start, end, state) {
       // Show landing card or pending drawn card now if the animation that finished belongs to the active player
       const activePlayer = state.players[state.turnIndex];
       if (activePlayer && playerId === activePlayer.id) {
-        if (pendingCardDrawn) {
-          showCenterOverlayCard({
-            type: 'card',
-            title: pendingCardDrawn.title,
-            text: pendingCardDrawn.text,
-            player: pendingCardDrawn.player
-          });
-          SoundSystem.playCard();
-          pendingCardDrawn = null;
+        if (pendingOverlayCard) {
+          showCenterOverlayCard(pendingOverlayCard);
+          pendingOverlayCard = null;
         } else if (state.currentTurnAction === 'handle_tile') {
           const prop = state.properties[activePlayer.position];
           if (prop && prop.owner === null && prop.price !== null) {
@@ -940,7 +985,16 @@ function openTradeDialog(counterpartId, isReadOnly = false, tradeState = null) {
 
   // Titles
   document.getElementById('trade-modal-title').innerText = isReadOnly ? `🤝 Trato de ${proposer.username}` : `🤝 Proponer Trato a ${receiver.username}`;
-  document.getElementById('trade-receiver-title').innerText = `Solicitudes de ${proposer.username} a ${receiver.username}`;
+  
+  const senderTitleEl = document.getElementById('trade-sender-title');
+  const receiverTitleEl = document.getElementById('trade-receiver-title');
+  if (isReadOnly) {
+    senderTitleEl.innerText = `Lo que ofrece ${proposer.username}`;
+    receiverTitleEl.innerText = `Lo que ofrece ${receiver.username}`;
+  } else {
+    senderTitleEl.innerText = 'Tus Ofrecimientos';
+    receiverTitleEl.innerText = `Peticiones a ${receiver.username}`;
+  }
 
   // Reset inputs
   const offerMoneyInput = document.getElementById('trade-offer-money');
@@ -960,36 +1014,65 @@ function openTradeDialog(counterpartId, isReadOnly = false, tradeState = null) {
   // Left column: Proposer (Sender) offerings
   const proposerPropsList = document.getElementById('trade-offer-properties-list');
   proposerPropsList.innerHTML = '';
-  const proposerProps = state.properties.filter(p => p.owner === proposer.id);
   
-  if (proposerProps.length === 0 && proposer.getOutOfJailCards === 0) {
-    proposerPropsList.innerHTML = '<p class="placeholder-text" style="font-size:0.7rem;">Sin propiedades ni cartas</p>';
+  if (isReadOnly) {
+    const offeredProps = tradeState ? tradeState.senderOffer.properties : [];
+    const offeredJailCards = tradeState ? tradeState.senderOffer.jailCards : 0;
+    
+    if (offeredProps.length === 0 && offeredJailCards === 0) {
+      proposerPropsList.innerHTML = '<p class="placeholder-text" style="font-size:0.8rem; color: var(--text-secondary); text-align: center; margin-top: 15px;">Ninguna propiedad ni carta</p>';
+    } else {
+      offeredProps.forEach(propId => {
+        const prop = state.properties.find(p => p.id === propId);
+        if (prop) {
+          const div = document.createElement('div');
+          div.className = 'trade-item-view';
+          div.innerHTML = `
+            <div class="trade-prop-color-indicator" style="background-color: var(--color-${prop.color || 'gray'});"></div>
+            <span>${prop.name} ${prop.mortgaged ? '(Hipotecada)' : ''}</span>
+          `;
+          proposerPropsList.appendChild(div);
+        }
+      });
+      if (offeredJailCards > 0) {
+        const div = document.createElement('div');
+        div.className = 'trade-item-view';
+        div.innerHTML = `
+          <div class="trade-prop-color-indicator" style="background-color: var(--neon-pink); box-shadow: 0 0 5px var(--neon-pink);"></div>
+          <span>✉ ${offeredJailCards} Tarjeta(s) Cárcel</span>
+        `;
+        proposerPropsList.appendChild(div);
+      }
+    }
   } else {
-    // Render properties
-    proposerProps.forEach(prop => {
-      const isChecked = tradeState && tradeState.senderOffer.properties.includes(prop.id);
-      const label = document.createElement('label');
-      label.className = 'trade-prop-checkbox-label';
-      label.innerHTML = `
-        <input type="checkbox" value="${prop.id}" ${isChecked ? 'checked' : ''} ${isReadOnly ? 'disabled' : ''}>
-        <div class="trade-prop-color-indicator" style="background-color: var(--color-${prop.color || 'gray'});"></div>
-        <span>${prop.name} ${prop.mortgaged ? '(H)' : ''}</span>
-      `;
-      proposerPropsList.appendChild(label);
-    });
-
-    // Render Jail Cards as checkboxes
-    if (proposer.getOutOfJailCards > 0) {
-      for (let i = 0; i < proposer.getOutOfJailCards; i++) {
-        const isChecked = tradeState && tradeState.senderOffer.jailCards > i;
+    const proposerProps = state.properties.filter(p => p.owner === proposer.id);
+    if (proposerProps.length === 0 && proposer.getOutOfJailCards === 0) {
+      proposerPropsList.innerHTML = '<p class="placeholder-text" style="font-size:0.7rem;">Sin propiedades ni cartas</p>';
+    } else {
+      proposerProps.forEach(prop => {
+        const isChecked = tradeState && tradeState.senderOffer.properties.includes(prop.id);
         const label = document.createElement('label');
         label.className = 'trade-prop-checkbox-label';
         label.innerHTML = `
-          <input type="checkbox" data-type="jailcard" value="1" ${isChecked ? 'checked' : ''} ${isReadOnly ? 'disabled' : ''}>
-          <div class="trade-prop-color-indicator" style="background-color: var(--neon-pink); box-shadow: 0 0 5px var(--neon-pink);"></div>
-          <span>✉ Tarjeta Cárcel #${i+1}</span>
+          <input type="checkbox" value="${prop.id}" ${isChecked ? 'checked' : ''}>
+          <div class="trade-prop-color-indicator" style="background-color: var(--color-${prop.color || 'gray'});"></div>
+          <span>${prop.name} ${prop.mortgaged ? '(H)' : ''}</span>
         `;
         proposerPropsList.appendChild(label);
+      });
+
+      if (proposer.getOutOfJailCards > 0) {
+        for (let i = 0; i < proposer.getOutOfJailCards; i++) {
+          const isChecked = tradeState && tradeState.senderOffer.jailCards > i;
+          const label = document.createElement('label');
+          label.className = 'trade-prop-checkbox-label';
+          label.innerHTML = `
+            <input type="checkbox" data-type="jailcard" value="1" ${isChecked ? 'checked' : ''}>
+            <div class="trade-prop-color-indicator" style="background-color: var(--neon-pink); box-shadow: 0 0 5px var(--neon-pink);"></div>
+            <span>✉ Tarjeta Cárcel #${i+1}</span>
+          `;
+          proposerPropsList.appendChild(label);
+        }
       }
     }
   }
@@ -997,36 +1080,65 @@ function openTradeDialog(counterpartId, isReadOnly = false, tradeState = null) {
   // Right column: Receiver offerings
   const receiverPropsList = document.getElementById('trade-request-properties-list');
   receiverPropsList.innerHTML = '';
-  const receiverProps = state.properties.filter(p => p.owner === receiver.id);
-
-  if (receiverProps.length === 0 && receiver.getOutOfJailCards === 0) {
-    receiverPropsList.innerHTML = '<p class="placeholder-text" style="font-size:0.7rem;">Sin propiedades ni cartas</p>';
+  
+  if (isReadOnly) {
+    const requestedProps = tradeState ? tradeState.receiverOffer.properties : [];
+    const requestedJailCards = tradeState ? tradeState.receiverOffer.jailCards : 0;
+    
+    if (requestedProps.length === 0 && requestedJailCards === 0) {
+      receiverPropsList.innerHTML = '<p class="placeholder-text" style="font-size:0.8rem; color: var(--text-secondary); text-align: center; margin-top: 15px;">Ninguna propiedad ni carta</p>';
+    } else {
+      requestedProps.forEach(propId => {
+        const prop = state.properties.find(p => p.id === propId);
+        if (prop) {
+          const div = document.createElement('div');
+          div.className = 'trade-item-view';
+          div.innerHTML = `
+            <div class="trade-prop-color-indicator" style="background-color: var(--color-${prop.color || 'gray'});"></div>
+            <span>${prop.name} ${prop.mortgaged ? '(Hipotecada)' : ''}</span>
+          `;
+          receiverPropsList.appendChild(div);
+        }
+      });
+      if (requestedJailCards > 0) {
+        const div = document.createElement('div');
+        div.className = 'trade-item-view';
+        div.innerHTML = `
+          <div class="trade-prop-color-indicator" style="background-color: var(--neon-pink); box-shadow: 0 0 5px var(--neon-pink);"></div>
+          <span>✉ ${requestedJailCards} Tarjeta(s) Cárcel</span>
+        `;
+        receiverPropsList.appendChild(div);
+      }
+    }
   } else {
-    // Render properties
-    receiverProps.forEach(prop => {
-      const isChecked = tradeState && tradeState.receiverOffer.properties.includes(prop.id);
-      const label = document.createElement('label');
-      label.className = 'trade-prop-checkbox-label';
-      label.innerHTML = `
-        <input type="checkbox" value="${prop.id}" ${isChecked ? 'checked' : ''} ${isReadOnly ? 'disabled' : ''}>
-        <div class="trade-prop-color-indicator" style="background-color: var(--color-${prop.color || 'gray'});"></div>
-        <span>${prop.name} ${prop.mortgaged ? '(H)' : ''}</span>
-      `;
-      receiverPropsList.appendChild(label);
-    });
-
-    // Render Jail Cards as checkboxes
-    if (receiver.getOutOfJailCards > 0) {
-      for (let i = 0; i < receiver.getOutOfJailCards; i++) {
-        const isChecked = tradeState && tradeState.receiverOffer.jailCards > i;
+    const receiverProps = state.properties.filter(p => p.owner === receiver.id);
+    if (receiverProps.length === 0 && receiver.getOutOfJailCards === 0) {
+      receiverPropsList.innerHTML = '<p class="placeholder-text" style="font-size:0.7rem;">Sin propiedades ni cartas</p>';
+    } else {
+      receiverProps.forEach(prop => {
+        const isChecked = tradeState && tradeState.receiverOffer.properties.includes(prop.id);
         const label = document.createElement('label');
         label.className = 'trade-prop-checkbox-label';
         label.innerHTML = `
-          <input type="checkbox" data-type="jailcard" value="1" ${isChecked ? 'checked' : ''} ${isReadOnly ? 'disabled' : ''}>
-          <div class="trade-prop-color-indicator" style="background-color: var(--neon-pink); box-shadow: 0 0 5px var(--neon-pink);"></div>
-          <span>✉ Tarjeta Cárcel #${i+1}</span>
+          <input type="checkbox" value="${prop.id}" ${isChecked ? 'checked' : ''}>
+          <div class="trade-prop-color-indicator" style="background-color: var(--color-${prop.color || 'gray'});"></div>
+          <span>${prop.name} ${prop.mortgaged ? '(H)' : ''}</span>
         `;
         receiverPropsList.appendChild(label);
+      });
+
+      if (receiver.getOutOfJailCards > 0) {
+        for (let i = 0; i < receiver.getOutOfJailCards; i++) {
+          const isChecked = tradeState && tradeState.receiverOffer.jailCards > i;
+          const label = document.createElement('label');
+          label.className = 'trade-prop-checkbox-label';
+          label.innerHTML = `
+            <input type="checkbox" data-type="jailcard" value="1" ${isChecked ? 'checked' : ''}>
+            <div class="trade-prop-color-indicator" style="background-color: var(--neon-pink); box-shadow: 0 0 5px var(--neon-pink);"></div>
+            <span>✉ Tarjeta Cárcel #${i+1}</span>
+          `;
+          receiverPropsList.appendChild(label);
+        }
       }
     }
   }
@@ -1101,8 +1213,14 @@ function renderTradeModal(state) {
     document.getElementById('trade-modal-title').innerText = `⏳ Esperando respuesta de trato...`;
     document.getElementById('trade-response-actions').style.display = 'none';
   } else {
-    // Third party trade: close modal
-    tradeModal.classList.remove('active');
+    // Spectator mode: show trade details in read-only without response action buttons
+    openTradeDialog(trade.receiverId, true, trade);
+    const sender = state.players.find(p => p.id === trade.senderId);
+    const receiver = state.players.find(p => p.id === trade.receiverId);
+    const senderName = sender ? sender.username : 'Jugador';
+    const receiverName = receiver ? receiver.username : 'Jugador';
+    document.getElementById('trade-modal-title').innerText = `🤝 Trato propuesto: ${senderName} ➔ ${receiverName}`;
+    document.getElementById('trade-response-actions').style.display = 'none';
   }
 }
 
@@ -1221,6 +1339,12 @@ window.addEventListener('resize', () => {
 // ----------------------------------------------------
 
 function showCenterOverlayCard(data) {
+  const activePlayer = currentGameState ? currentGameState.players[currentGameState.turnIndex] : null;
+  if (activePlayer && animatingPlayers.has(activePlayer.id) && (data.isLanding || data.type === 'card')) {
+    pendingOverlayCard = data;
+    return;
+  }
+
   const overlay = document.getElementById('center-overlay-card');
   const content = document.getElementById('overlay-card-content');
   const closeBtn = document.getElementById('close-overlay-card');
@@ -1318,7 +1442,7 @@ function showCenterOverlayCard(data) {
     activePropertyId = prop.id;
 
     content.innerHTML = `
-      <div style="border: 2px solid ${headerColor}; box-shadow: 0 0 15px ${headerColor}55; border-radius: 10px; width: 220px; background: rgba(13, 17, 39, 0.98); overflow: hidden; display: flex; flex-direction: column; text-align: center;">
+      <div style="border: 2px solid ${headerColor}; box-shadow: 0 0 15px ${headerColor}55; border-radius: 10px; width: min(220px, 100%); background: rgba(13, 17, 39, 0.98); overflow: hidden; display: flex; flex-direction: column; text-align: center;">
         <div style="background-color: ${headerColor}; padding: 8px; color: #fff; font-weight: 800; font-size: 0.8rem; text-shadow: 0 1px 2px #000; text-transform: uppercase;">
           ${prop.type === 'property' ? 'Propiedad de Ciudad' : prop.type === 'transport' ? 'Transporte' : 'Servicio Público'}
         </div>
@@ -1412,18 +1536,13 @@ function getSVGIconHtml(prop) {
 
 // Socket listener for drawn cards
 socket.on('cardDrawn', ({ title, text, player }) => {
-  const activePlayer = currentGameState ? currentGameState.players[currentGameState.turnIndex] : null;
-  if (activePlayer && animatingPlayers.has(activePlayer.id)) {
-    pendingCardDrawn = { title, text, player };
-  } else {
-    showCenterOverlayCard({
-      type: 'card',
-      title,
-      text,
-      player
-    });
-    SoundSystem.playCard();
-  }
+  showCenterOverlayCard({
+    type: 'card',
+    title,
+    text,
+    player
+  });
+  SoundSystem.playCard();
 });
 
 // Close overlay handler
