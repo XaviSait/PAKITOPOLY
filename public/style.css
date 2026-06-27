@@ -61,6 +61,14 @@ body {
 }
 
 /* --- LOGO TEXT --- */
+@keyframes tokenHop {
+  0% { transform: scale(1) translateY(0); }
+  50% { transform: scale(1.2) translateY(-15px); }
+  100% { transform: scale(1) translateY(0); }
+}
+.token-hop {
+  animation: tokenHop 0.25s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+}
 .logo-text {
   font-weight: 800;
   letter-spacing: 2px;
@@ -207,20 +215,31 @@ body {
   display: none;
   min-height: 100vh;
 }
+#screen-lobby {
+  background: linear-gradient(-45deg, #070913, #161a2f, #0d1127, #0a0e1a);
+  background-size: 400% 400%;
+  animation: lobbyBg 15s ease infinite;
+}
+@keyframes lobbyBg {
+  0% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
 .screen.active {
   display: flex;
   align-items: center;
   justify-content: center;
 }
 .lobby-card {
-  background: rgba(13, 17, 39, 0.85);
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(13, 17, 39, 0.6);
+  border: 1px solid rgba(255, 255, 255, 0.15);
   padding: 40px 30px;
   border-radius: 20px;
   max-width: 480px;
   width: 90%;
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.8), 0 0 30px rgba(0, 229, 255, 0.1);
-  backdrop-filter: blur(20px);
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.8), 0 0 40px rgba(0, 229, 255, 0.2);
+  backdrop-filter: blur(25px);
+  -webkit-backdrop-filter: blur(25px);
 }
 .lobby-subtitle {
   text-align: center;
@@ -445,6 +464,38 @@ input:checked + .slider:before {
   user-select: none;
   animation: none;
 }
+.board-center {
+  grid-area: center;
+  background-color: var(--bg-card);
+  border: 1px solid var(--border-glass);
+  border-radius: 12px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  padding: 15px;
+  box-shadow: inset 0 0 40px rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(10px);
+}
+
+/* --- BOARD TOOLTIP --- */
+#board-tooltip {
+  position: absolute;
+  z-index: 1000;
+  background: rgba(13, 17, 39, 0.95);
+  border: 1px solid var(--neon-blue);
+  box-shadow: 0 0 15px rgba(0, 229, 255, 0.3);
+  padding: 10px;
+  border-radius: 8px;
+  font-size: 0.85rem;
+  pointer-events: none;
+  backdrop-filter: blur(5px);
+  color: var(--text-primary);
+  display: none;
+  line-height: 1.4;
+}
+
+/* --- CELLS GENERAL --- */
 .die.rolling {
   animation: rollAnimation 0.6s ease-in-out infinite;
 }
@@ -825,36 +876,41 @@ input:checked + .slider:before {
 .property-deed-card {
   border: 1px solid var(--border-glass);
   border-radius: 6px;
-  background: rgba(0,0,0,0.3);
-  padding: 6px;
+  background: rgba(13, 17, 39, 0.8);
+  padding: 0;
   display: flex;
   flex-direction: column;
-  align-items: center;
-  gap: 4px;
+  align-items: stretch;
   cursor: pointer;
   transition: all 0.2s;
   position: relative;
+  overflow: hidden;
+  box-shadow: 0 4px 6px rgba(0,0,0,0.3);
 }
 .property-deed-card:hover {
   transform: translateY(-2px);
-  border-color: rgba(255,255,255,0.25);
+  border-color: rgba(255,255,255,0.4);
+  box-shadow: 0 6px 12px rgba(0,0,0,0.5);
 }
 .property-deed-card.mortgaged {
   opacity: 0.5;
 }
 .deed-color-header {
   width: 100%;
-  height: 6px;
-  border-radius: 3px;
+  height: 18px;
+  border-bottom: 1px solid #000;
 }
 .deed-title {
   font-size: 0.75rem;
   font-weight: 600;
   text-align: center;
+  padding: 6px 2px 2px 2px;
 }
 .deed-houses-info {
   font-size: 0.65rem;
   color: var(--neon-green);
+  text-align: center;
+  padding-bottom: 6px;
 }
 .deed-ops {
   display: none;
@@ -906,15 +962,17 @@ input:checked + .slider:before {
   display: flex;
 }
 .modal-content {
-  background: rgba(13, 17, 39, 0.95);
-  border: 1px solid var(--border-glass);
+  background: rgba(13, 17, 39, 0.6);
+  border: 1px solid rgba(255, 255, 255, 0.15);
   padding: 24px;
   border-radius: 16px;
-  box-shadow: 0 15px 40px rgba(0,0,0,0.8);
+  box-shadow: 0 20px 50px rgba(0,0,0,0.9), 0 0 20px rgba(0, 229, 255, 0.1);
   width: 90%;
   max-width: 580px;
   position: relative;
   margin: auto;
+  backdrop-filter: blur(25px);
+  -webkit-backdrop-filter: blur(25px);
   animation: modalEnter 0.3s cubic-bezier(0.16, 1, 0.3, 1);
 }
 @keyframes modalEnter {

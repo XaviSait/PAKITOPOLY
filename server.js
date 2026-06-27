@@ -989,7 +989,7 @@ io.on('connection', (socket) => {
   socket.on('proposeTrade', ({ receiverId, senderOffer, receiverOffer }) => {
     const roomId = socket.roomId;
     const room = rooms[roomId];
-    if (!room || room.trade.active || room.auction.active) return;
+    if (!room || room.trade.active || room.auction.active || room.currentTurnAction === 'bankrupt_or_pay') return;
 
     const sender = room.players.find(p => p.id === socket.id);
     const receiver = room.players.find(p => p.id === receiverId);
@@ -1188,8 +1188,21 @@ io.on('connection', (socket) => {
           // Clear active trade if disconnecting player was part of it
           if (room.trade.active && (room.trade.senderId === player.id || room.trade.receiverId === player.id)) {
             room.trade.active = false;
+            logMessage(room, `El trato activo se ha cancelado debido a una desconexión.`);
           }
-          logMessage(room, `${player.username} se ha desconectado. Esperando reconexión (30s)...`);
+          
+          // Cancel auction if they were the highest bidder
+          if (room.auction && room.auction.active && room.auction.highestBidder === player.id) {
+            logMessage(room, `El máximo postor se ha desconectado. Subasta cancelada.`);
+            if (auctionTimers[roomId]) {
+              clearInterval(auctionTimers[roomId]);
+              delete auctionTimers[roomId];
+            }
+            room.auction = { active: false, propIndex: null, currentBid: 0, highestBidder: null, participants: [], timer: 0 };
+            room.currentTurnAction = 'ended_action';
+          }
+
+          logMessage(room, `${player.username} se ha desconectado. Esperando reconexión (300s)...`);
           io.to(roomId).emit('stateUpdate', cleanRoomState(room));
 
           const timerKey = `${roomId}_${player.username}`;

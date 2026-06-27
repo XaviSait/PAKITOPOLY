@@ -454,6 +454,46 @@ function initBoard(state) {
       }
     });
 
+    // Add Hover Tooltip Logic
+    cellDiv.addEventListener('mouseenter', (e) => {
+      if (prop.type === 'property' || prop.type === 'transport' || prop.type === 'service') {
+        let tooltip = document.getElementById('board-tooltip');
+        if (!tooltip) {
+          tooltip = document.createElement('div');
+          tooltip.id = 'board-tooltip';
+          document.body.appendChild(tooltip);
+        }
+        
+        let ownerName = 'Nadie';
+        let ownerObj = currentGameState.players.find(p => p.id === prop.owner);
+        if (ownerObj) ownerName = ownerObj.username;
+
+        tooltip.innerHTML = `
+          <strong>${prop.name}</strong><br>
+          Precio: ${prop.price}M<br>
+          Dueño: <span style="color: ${ownerObj ? ownerObj.color : '#fff'}">${ownerName}</span>
+        `;
+        tooltip.style.display = 'block';
+        tooltip.style.left = \`\${e.pageX + 15}px\`;
+        tooltip.style.top = \`\${e.pageY + 15}px\`;
+      }
+    });
+
+    cellDiv.addEventListener('mousemove', (e) => {
+      let tooltip = document.getElementById('board-tooltip');
+      if (tooltip && tooltip.style.display === 'block') {
+        tooltip.style.left = \`\${e.pageX + 15}px\`;
+        tooltip.style.top = \`\${e.pageY + 15}px\`;
+      }
+    });
+
+    cellDiv.addEventListener('mouseleave', () => {
+      let tooltip = document.getElementById('board-tooltip');
+      if (tooltip) {
+        tooltip.style.display = 'none';
+      }
+    });
+
     boardDiv.appendChild(cellDiv);
   });
 
@@ -626,7 +666,7 @@ function updateTokens(state) {
 function getPlayerOffset(indexOnCell, totalOnCell) {
   if (totalOnCell <= 1) return { x: 0, y: 0 };
   const angle = (indexOnCell / totalOnCell) * Math.PI * 2;
-  const radius = 8; // Offset radius in pixels
+  const radius = 14; // Increased radius to prevent token overlap
   return {
     x: Math.cos(angle) * radius,
     y: Math.sin(angle) * radius
@@ -712,6 +752,15 @@ function animatePlayerPath(playerId, start, end, state) {
     playerPositions[playerId] = nextCell;
     updateTokenVisualPosition(playerId, state);
     
+    // Add hop animation
+    const tokenEl = playerTokens[playerId];
+    if (tokenEl) {
+      tokenEl.classList.remove('token-hop');
+      // trigger reflow
+      void tokenEl.offsetWidth;
+      tokenEl.classList.add('token-hop');
+    }
+
     // Play arpeggiated movement tone (rising pitch)
     const freq = 440 + (stepIndex * 40);
     SoundSystem.playTone(freq, 0.05, 'triangle');
@@ -848,9 +897,9 @@ function renderPropertiesDeck(state) {
   // Display name header
   document.getElementById('selected-player-name').innerText = player.id === localPlayerId ? 'Tus Propiedades' : player.username;
 
-  // Toggle Trade button visibility (only trade with other non-bankrupt players)
+  // Toggle Trade button visibility (only trade with other non-bankrupt players, and not during debt/auction)
   const tradeBtn = document.getElementById('btn-open-trade');
-  if (player.id !== localPlayerId && !player.isBankrupt && !localPlayer.isBankrupt) {
+  if (player.id !== localPlayerId && !player.isBankrupt && !localPlayer.isBankrupt && state.currentTurnAction !== 'bankrupt_or_pay' && !state.auction.active) {
     tradeBtn.style.display = 'block';
   } else {
     tradeBtn.style.display = 'none';
@@ -881,12 +930,6 @@ function renderPropertiesDeck(state) {
     } else if (prop.type === 'service') {
       housesText = 'Servicio';
     }
-
-    card.innerHTML = `
-      <div class="deed-title">${prop.name}</div>
-      <div class="deed-houses-info">${housesText} ${prop.mortgaged ? '(Hipotecada)' : ''}</div>
-    `;
-    card.insertBefore(colorHeader, card.firstChild);
 
     card.innerHTML = `
       <div class="deed-title">${prop.name}</div>
@@ -970,7 +1013,7 @@ document.getElementById('btn-bid-50').addEventListener('click', () => submitBidO
 document.getElementById('btn-bid-100').addEventListener('click', () => submitBidOffset(100));
 
 document.getElementById('btn-bid-custom').addEventListener('click', () => {
-  const val = parseInt(document.getElementById('input-custom-bid').value);
+  const val = Math.max(0, parseInt(document.getElementById('input-custom-bid').value) || 0);
   if (isNaN(val) || val <= 0) return showToast('Introduce un número de puja válido', true);
   socket.emit('submitBid', { bidAmount: val });
   document.getElementById('input-custom-bid').value = '';
@@ -1064,20 +1107,20 @@ function openTradeDialog(counterpartId, isReadOnly = false, tradeState = null) {
         const prop = state.properties.find(p => p.id === propId);
         if (prop) {
           const div = document.createElement('div');
-          div.className = 'trade-item-view';
+          div.className = 'trade-item-view property-deed-card';
           div.innerHTML = `
-            <div class="trade-prop-color-indicator" style="background-color: var(--color-${prop.color || 'gray'});"></div>
-            <span>${prop.name} ${prop.mortgaged ? '(Hipotecada)' : ''}</span>
+            <div class="deed-color-header" style="background-color: var(--color-${prop.color || 'gray'});"></div>
+            <div class="deed-title">${prop.name} ${prop.mortgaged ? '(H)' : ''}</div>
           `;
           proposerPropsList.appendChild(div);
         }
       });
       if (offeredJailCards > 0) {
         const div = document.createElement('div');
-        div.className = 'trade-item-view';
+        div.className = 'trade-item-view property-deed-card';
         div.innerHTML = `
-          <div class="trade-prop-color-indicator" style="background-color: var(--neon-pink); box-shadow: 0 0 5px var(--neon-pink);"></div>
-          <span>✉ ${offeredJailCards} Tarjeta(s) Cárcel</span>
+          <div class="deed-color-header" style="background-color: var(--neon-pink); box-shadow: 0 0 5px var(--neon-pink);"></div>
+          <div class="deed-title">✉ ${offeredJailCards} Tarjeta(s) Cárcel</div>
         `;
         proposerPropsList.appendChild(div);
       }
@@ -1090,11 +1133,13 @@ function openTradeDialog(counterpartId, isReadOnly = false, tradeState = null) {
       proposerProps.forEach(prop => {
         const isChecked = tradeState && tradeState.senderOffer.properties.includes(prop.id);
         const label = document.createElement('label');
-        label.className = 'trade-prop-checkbox-label';
+        label.className = 'trade-prop-checkbox-label property-deed-card';
         label.innerHTML = `
-          <input type="checkbox" value="${prop.id}" ${isChecked ? 'checked' : ''}>
-          <div class="trade-prop-color-indicator" style="background-color: var(--color-${prop.color || 'gray'});"></div>
-          <span>${prop.name} ${prop.mortgaged ? '(H)' : ''}</span>
+          <div class="deed-color-header" style="background-color: var(--color-${prop.color || 'gray'});"></div>
+          <div style="padding: 5px; display: flex; align-items: center; gap: 5px;">
+            <input type="checkbox" value="${prop.id}" ${isChecked ? 'checked' : ''}>
+            <span class="deed-title" style="font-size: 0.7rem; padding: 0;">${prop.name} ${prop.mortgaged ? '(H)' : ''}</span>
+          </div>
         `;
         proposerPropsList.appendChild(label);
       });
@@ -1103,11 +1148,13 @@ function openTradeDialog(counterpartId, isReadOnly = false, tradeState = null) {
         for (let i = 0; i < proposer.getOutOfJailCards; i++) {
           const isChecked = tradeState && tradeState.senderOffer.jailCards > i;
           const label = document.createElement('label');
-          label.className = 'trade-prop-checkbox-label';
+          label.className = 'trade-prop-checkbox-label property-deed-card';
           label.innerHTML = `
-            <input type="checkbox" data-type="jailcard" value="1" ${isChecked ? 'checked' : ''}>
-            <div class="trade-prop-color-indicator" style="background-color: var(--neon-pink); box-shadow: 0 0 5px var(--neon-pink);"></div>
-            <span>✉ Tarjeta Cárcel #${i+1}</span>
+            <div class="deed-color-header" style="background-color: var(--neon-pink); box-shadow: 0 0 5px var(--neon-pink);"></div>
+            <div style="padding: 5px; display: flex; align-items: center; gap: 5px;">
+              <input type="checkbox" data-type="jailcard" value="1" ${isChecked ? 'checked' : ''}>
+              <span class="deed-title" style="font-size: 0.7rem; padding: 0;">✉ Tarjeta Cárcel #${i+1}</span>
+            </div>
           `;
           proposerPropsList.appendChild(label);
         }
@@ -1199,12 +1246,12 @@ function openTradeDialog(counterpartId, isReadOnly = false, tradeState = null) {
     newSendBtn.addEventListener('click', () => {
       // Gather inputs
       const senderOffer = {
-        money: parseInt(offerMoneyInput.value) || 0,
+        money: Math.max(0, parseInt(offerMoneyInput.value) || 0),
         jailCards: Array.from(proposerPropsList.querySelectorAll('input[data-type="jailcard"]:checked')).length,
         properties: Array.from(proposerPropsList.querySelectorAll('input:not([data-type="jailcard"]):checked')).map(cb => parseInt(cb.value))
       };
       const receiverOffer = {
-        money: parseInt(requestMoneyInput.value) || 0,
+        money: Math.max(0, parseInt(requestMoneyInput.value) || 0),
         jailCards: Array.from(receiverPropsList.querySelectorAll('input[data-type="jailcard"]:checked')).length,
         properties: Array.from(receiverPropsList.querySelectorAll('input:not([data-type="jailcard"]):checked')).map(cb => parseInt(cb.value))
       };
@@ -1291,12 +1338,12 @@ document.getElementById('btn-counter-trade').addEventListener('click', () => {
     const counterpartPropsList = document.getElementById('trade-request-properties-list');
 
     const senderOffer = {
-      money: parseInt(offerMoneyInput.value) || 0,
+      money: Math.max(0, parseInt(offerMoneyInput.value) || 0),
       jailCards: Array.from(proposerPropsList.querySelectorAll('input[data-type="jailcard"]:checked')).length,
       properties: Array.from(proposerPropsList.querySelectorAll('input:not([data-type="jailcard"]):checked')).map(cb => parseInt(cb.value))
     };
     const receiverOffer = {
-      money: parseInt(requestMoneyInput.value) || 0,
+      money: Math.max(0, parseInt(requestMoneyInput.value) || 0),
       jailCards: Array.from(counterpartPropsList.querySelectorAll('input[data-type="jailcard"]:checked')).length,
       properties: Array.from(counterpartPropsList.querySelectorAll('input:not([data-type="jailcard"]):checked')).map(cb => parseInt(cb.value))
     };
