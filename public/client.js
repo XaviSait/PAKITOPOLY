@@ -474,16 +474,16 @@ function initBoard(state) {
           Dueño: <span style="color: ${ownerObj ? ownerObj.color : '#fff'}">${ownerName}</span>
         `;
         tooltip.style.display = 'block';
-        tooltip.style.left = \`\${e.pageX + 15}px\`;
-        tooltip.style.top = \`\${e.pageY + 15}px\`;
+        tooltip.style.left = `${e.pageX + 15}px`;
+        tooltip.style.top = `${e.pageY + 15}px`;
       }
     });
 
     cellDiv.addEventListener('mousemove', (e) => {
       let tooltip = document.getElementById('board-tooltip');
       if (tooltip && tooltip.style.display === 'block') {
-        tooltip.style.left = \`\${e.pageX + 15}px\`;
-        tooltip.style.top = \`\${e.pageY + 15}px\`;
+        tooltip.style.left = `${e.pageX + 15}px`;
+        tooltip.style.top = `${e.pageY + 15}px`;
       }
     });
 
