@@ -751,14 +751,10 @@ function animatePlayerPath(playerId, start, end, state) {
     const nextCell = path[stepIndex];
     playerPositions[playerId] = nextCell;
     updateTokenVisualPosition(playerId, state);
-    
-    // Add hop animation
+    // Update visual position continuously during path animation
     const tokenEl = playerTokens[playerId];
     if (tokenEl) {
-      tokenEl.classList.remove('token-hop');
-      // trigger reflow
-      void tokenEl.offsetWidth;
-      tokenEl.classList.add('token-hop');
+      // Just keep positioning updated, no CSS hop
     }
 
     // Play arpeggiated movement tone (rising pitch)
@@ -1133,13 +1129,11 @@ function openTradeDialog(counterpartId, isReadOnly = false, tradeState = null) {
       proposerProps.forEach(prop => {
         const isChecked = tradeState && tradeState.senderOffer.properties.includes(prop.id);
         const label = document.createElement('label');
-        label.className = 'trade-prop-checkbox-label property-deed-card';
+        label.className = 'trade-prop-checkbox-label';
         label.innerHTML = `
-          <div class="deed-color-header" style="background-color: var(--color-${prop.color || 'gray'});"></div>
-          <div style="padding: 5px; display: flex; align-items: center; gap: 5px;">
-            <input type="checkbox" value="${prop.id}" ${isChecked ? 'checked' : ''}>
-            <span class="deed-title" style="font-size: 0.7rem; padding: 0;">${prop.name} ${prop.mortgaged ? '(H)' : ''}</span>
-          </div>
+          <input type="checkbox" value="${prop.id}" ${isChecked ? 'checked' : ''}>
+          <div class="trade-prop-color-indicator" style="background-color: var(--color-${prop.color || 'gray'});"></div>
+          <span>${prop.name} ${prop.mortgaged ? '(H)' : ''}</span>
         `;
         proposerPropsList.appendChild(label);
       });
@@ -1148,13 +1142,11 @@ function openTradeDialog(counterpartId, isReadOnly = false, tradeState = null) {
         for (let i = 0; i < proposer.getOutOfJailCards; i++) {
           const isChecked = tradeState && tradeState.senderOffer.jailCards > i;
           const label = document.createElement('label');
-          label.className = 'trade-prop-checkbox-label property-deed-card';
+          label.className = 'trade-prop-checkbox-label';
           label.innerHTML = `
-            <div class="deed-color-header" style="background-color: var(--neon-pink); box-shadow: 0 0 5px var(--neon-pink);"></div>
-            <div style="padding: 5px; display: flex; align-items: center; gap: 5px;">
-              <input type="checkbox" data-type="jailcard" value="1" ${isChecked ? 'checked' : ''}>
-              <span class="deed-title" style="font-size: 0.7rem; padding: 0;">✉ Tarjeta Cárcel #${i+1}</span>
-            </div>
+            <input type="checkbox" data-type="jailcard" value="1" ${isChecked ? 'checked' : ''}>
+            <div class="trade-prop-color-indicator" style="background-color: var(--neon-pink); box-shadow: 0 0 5px var(--neon-pink);"></div>
+            <span>? Tarjeta Cárcel #${i+1}</span>
           `;
           proposerPropsList.appendChild(label);
         }
