@@ -457,19 +457,6 @@ input:checked + .slider:before {
   user-select: none;
   animation: none;
 }
-.board-center {
-  grid-area: center;
-  background-color: var(--bg-card);
-  border: 1px solid var(--border-glass);
-  border-radius: 12px;
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  align-items: center;
-  padding: 15px;
-  box-shadow: inset 0 0 40px rgba(0, 0, 0, 0.5);
-  backdrop-filter: blur(10px);
-}
 
 /* --- BOARD TOOLTIP --- */
 #board-tooltip {
